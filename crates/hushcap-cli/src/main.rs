@@ -73,7 +73,11 @@ enum Command {
 #[derive(Subcommand)]
 enum ModelsAction {
     /// List available and installed models (default).
-    List,
+    List {
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Download a model (the only time Hushcap uses the network).
     Download {
         /// Model id, e.g. whisper-base.en-q5_1. Use "recommended" for the
@@ -237,7 +241,9 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Command::Devices => devices(),
-        Command::Models { action } => models_cmd(&store, action.unwrap_or(ModelsAction::List)),
+        Command::Models { action } => {
+            models_cmd(&store, action.unwrap_or(ModelsAction::List { json: false }))
+        }
         Command::Transcribe(args) => transcribe(&store, args),
         Command::Live(args) => live(&store, args),
     }
@@ -278,7 +284,10 @@ fn devices() -> Result<()> {
 fn models_cmd(store: &ModelStore, action: ModelsAction) -> Result<()> {
     match action {
         ModelsAction::Dir => println!("{}", store.dir().display()),
-        ModelsAction::List => {
+        ModelsAction::List { json: true } => {
+            println!("{}", serde_json::to_string_pretty(&store.catalog_status())?);
+        }
+        ModelsAction::List { json: false } => {
             println!("Models folder: {}\n", store.dir().display());
             for kind in [ModelKind::Speech, ModelKind::Speaker] {
                 println!(
