@@ -92,13 +92,47 @@ jobs:
         run: |
           curl -sSfL -o jfk.wav https://github.com/ggml-org/whisper.cpp/raw/master/samples/jfk.wav
           ./target/release/hushcap transcribe jfk.wav --model whisper-tiny.en --format srt | tee out.srt
-          grep -qiE "ask not what your country can do for you" out.srt
+          # Phrases can be split at pauses ("Ask not!" / "what your country…"), so check pieces.
+          grep -qi "fellow americans" out.srt
+          grep -qi "ask not" out.srt
+          grep -qi "what you can do for your country" out.srt
           ./target/release/hushcap transcribe jfk.wav --model whisper-tiny.en --format json > out.json
-          python3 -c "import json; c=json.load(open('out.json'))['captions']; assert c and c[0]['startMs'] < 2000, c"
+          python3 - <<'PY'
+          import json
+          captions = json.load(open("out.json"))["captions"]
+          assert len(captions) >= 2, captions
+          assert captions[0]["startMs"] < 2000, captions
+          assert all(a["endMs"] <= b["startMs"] for a, b in zip(captions, captions[1:])), captions
+          # A single speaker must get a single label.
+          assert len({c["speaker"] for c in captions}) == 1, captions
+          PY
       - name: Speaker model integration test
         env:
           HUSHCAP_TEST_SPEAKER_MODEL: ${{ github.workspace }}/.models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx
         run: cargo test --release --locked -p hushcap-engine --test speaker_model -- --nocapture
+
+  frontend:
+    name: Desktop frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Format and lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
 
   android:
     name: Android

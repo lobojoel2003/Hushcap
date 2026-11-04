@@ -1,0 +1,34 @@
+[package]
+name = "hushcap-desktop"
+description = "Hushcap: private, offline live captions for the desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+default-run = "hushcap-desktop"
+
+[lib]
+name = "hushcap_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+hushcap-core.workspace = true
+hushcap-engine.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2.8"
+tauri-plugin-opener = "2.7"
+tauri-plugin-window-state = "2.5"
+
+[dev-dependencies]
+tempfile.workspace = true

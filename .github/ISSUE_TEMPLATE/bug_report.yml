@@ -1,0 +1,55 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't attach recordings of real conversations.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, Linux, Android, Command-line tool, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Hushcap version and build
+      description: From the About screen or `hushcap --version`, e.g. "0.1.0 (build 42, 1a2b3c4d)".
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and hardware
+      placeholder: Ubuntu 24.04 (PipeWire), Ryzen 5 5600U / Pixel 7, Android 15
+  - type: input
+    id: model
+    attributes:
+      label: Speech and speaker models
+      placeholder: English · Base (compact), CAM++
+  - type: checkboxes
+    id: sources
+    attributes:
+      label: Audio sources involved
+      options:
+        - label: Microphone
+        - label: System / device audio
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Desktop - run from a terminal with `RUST_LOG=debug`. CLI - add `-v`.
+      render: text

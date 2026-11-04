@@ -1,0 +1,89 @@
+name: Model catalogue
+
+# Downloads every model in the catalogues and checks it, so a changed or
+# vanished upstream file is noticed before users hit it. The job summary lists
+# each file's size and SHA-256 for updating crates/hushcap-core/src/models.rs.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 3 * *" # monthly
+  push:
+    branches: [main]
+    paths:
+      - crates/hushcap-core/src/models.rs
+      - android/app/src/main/java/io/github/lobojoel2003/hushcap/core/ModelCatalog.kt
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-models:
+    name: Desktop models
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: models
+      - run: cargo build --release --locked -p hushcap-cli
+      - name: Download and verify every model
+        run: |
+          set -uo pipefail
+          ./target/release/hushcap models list --json > catalog.json
+          {
+            echo "## Desktop model catalogue"
+            echo
+            echo "| Model | Bytes | SHA-256 | Catalogue checksum |"
+            echo "| --- | ---: | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for row in $(jq -r '.[] | @base64' catalog.json); do
+            m() { echo "$row" | base64 -d | jq -r "$1"; }
+            id="$(m .id)"; url="$(m .url)"; expected="$(m '.sha256 // ""')"
+            if ! curl -sSfL --retry 3 -o model.bin "$url"; then
+              echo "| $id | — | download failed | ❌ |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            size="$(stat -c %s model.bin)"
+            sum="$(sha256sum model.bin | cut -d' ' -f1)"
+            if [[ -z "$expected" ]]; then
+              status="➖ not pinned"
+            elif [[ "$sum" == "$expected" ]]; then
+              status="✅ matches"
+            else
+              status="❌ MISMATCH (expected $expected)"
+              failed=1
+            fi
+            echo "$id $size $sum"
+            echo "| \`$id\` | $size | \`$sum\` | $status |" >> "$GITHUB_STEP_SUMMARY"
+            rm -f model.bin
+          done
+          exit $failed
+
+  android-models:
+    name: Android models
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check every Vosk model URL
+        run: |
+          set -uo pipefail
+          catalog=android/app/src/main/java/io/github/lobojoel2003/hushcap/core/ModelCatalog.kt
+          ids="$(grep -oE '"vosk-model-[a-z0-9.-]+"' "$catalog" | tr -d '"' | sort -u)"
+          echo "## Android model catalogue" >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for id in $ids; do
+            url="https://alphacephei.com/vosk/models/$id.zip"
+            size="$(curl -sSfIL --retry 3 "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{v=$2} END{print v}')"
+            if [[ -n "$size" ]]; then
+              echo "- ✅ \`$id\` ($((size / 1000000)) MB)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- ❌ \`$id\` unavailable" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
+          exit $failed

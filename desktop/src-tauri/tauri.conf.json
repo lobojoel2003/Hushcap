@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hushcap",
+  "mainBinaryName": "hushcap-desktop",
+  "version": "0.1.0",
+  "identifier": "io.github.lobojoel2003.hushcap",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Hushcap",
+        "width": 980,
+        "height": 680,
+        "minWidth": 380,
+        "minHeight": 300,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "Hushcap contributors",
+    "copyright": "\u00a9 Hushcap contributors. GPL-3.0-or-later.",
+    "category": "Utility",
+    "shortDescription": "Private, offline live captions",
+    "longDescription": "Hushcap shows live captions for your microphone and your computer's audio, labels who is speaking, and does it all on your device. No audio ever leaves your computer.",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "homepage": "https://github.com/lobojoel2003/Hushcap",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libasound2t64 | libasound2"
+        ],
+        "section": "sound"
+      },
+      "rpm": {
+        "depends": [
+          "alsa-lib"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

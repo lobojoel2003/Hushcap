@@ -1,0 +1,275 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub Release for the version in VERSION (unchecked = build only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  HUSHCAP_BUILD_NUMBER: ${{ github.run_number }}
+  HUSHCAP_GIT_SHA: ${{ github.sha }}
+  # Portable binaries: an AVX2 baseline instead of the build machine's CPU.
+  GGML_NATIVE: "OFF"
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version and tag
+        id: meta
+        env:
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            publish=true
+          else
+            tag="v$version"
+            publish="${PUBLISH_INPUT:-false}"
+          fi
+          if [[ "$publish" == "true" ]]; then
+            ./scripts/check-version.sh "$tag"
+          else
+            ./scripts/check-version.sh
+          fi
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^\[[^]]+\]: http/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > notes.md
+          if [[ ! -s notes.md ]]; then
+            echo "Release build of Hushcap $VERSION." > notes.md
+          fi
+          cat notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-22.04
+          - name: Windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf \
+            libfuse2 file
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.os }}
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Build installers
+        working-directory: desktop
+        run: npm run tauri build -- --ci
+      - name: Build command-line tool
+        run: cargo build --release --locked -p hushcap-cli
+      - name: Collect artifacts
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          bundle=target/release/bundle
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            cp "$bundle"/deb/*.deb "$bundle"/rpm/*.rpm "$bundle"/appimage/*.AppImage dist/
+            name="hushcap-cli-$VERSION-linux-x86_64"
+            mkdir -p "$name"
+            cp target/release/hushcap LICENSE README.md "$name"/
+            tar -czf "dist/$name.tar.gz" "$name"
+          else
+            cp "$bundle"/msi/*.msi "$bundle"/nsis/*.exe dist/
+            name="hushcap-cli-$VERSION-windows-x86_64"
+            mkdir -p "$name"
+            cp target/release/hushcap.exe LICENSE README.md "$name"/
+            7z a -tzip "dist/$name.zip" "$name" > /dev/null
+          fi
+          ls -la dist
+      - name: Smoke-test the CLI
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then exe=target/release/hushcap.exe; else exe=target/release/hushcap; fi
+          "$exe" --version
+          "$exe" models list --json > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  android:
+    name: Android
+    needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      temporary-key: ${{ steps.keystore.outputs.temporary }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Signing key
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/hushcap-release.jks"
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$keystore"
+            {
+              echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+              echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            echo "temporary=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing with a temporary key."
+            pass="$(openssl rand -hex 24)"
+            echo "::add-mask::$pass"
+            keytool -genkeypair -noprompt -keystore "$keystore" -alias hushcap \
+              -keyalg RSA -keysize 4096 -validity 10000 \
+              -storepass "$pass" -keypass "$pass" -dname "CN=Hushcap (temporary CI key)"
+            {
+              echo "ANDROID_KEYSTORE_PASSWORD=$pass"
+              echo "ANDROID_KEY_ALIAS=hushcap"
+              echo "ANDROID_KEY_PASSWORD=$pass"
+            } >> "$GITHUB_ENV"
+            echo "temporary=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+      - name: Test and build release APK
+        working-directory: android
+        run: ./gradlew --no-daemon testReleaseUnitTest assembleRelease
+      - name: Verify signature
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk="$(ls android/app/build/outputs/apk/release/*.apk | grep -v unsigned | head -1)"
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --print-certs "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/Hushcap_${VERSION}_android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [prepare, desktop, android]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Assemble files and checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TEMPORARY_KEY: ${{ needs.android.outputs.temporary-key }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f ! -name notes.md -exec cp {} release/ \;
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          {
+            cat artifacts/release-notes/notes.md
+            echo
+            echo "## Downloads"
+            echo
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            echo "| Windows 10/11 installer | \`Hushcap_${VERSION}_x64-setup.exe\` (per-user) or \`Hushcap_${VERSION}_x64_en-US.msi\` |"
+            echo "| Debian / Ubuntu | \`Hushcap_${VERSION}_amd64.deb\` |"
+            echo "| Fedora / openSUSE | \`Hushcap-${VERSION}-1.x86_64.rpm\` |"
+            echo "| Any Linux | \`Hushcap_${VERSION}_amd64.AppImage\` |"
+            echo "| Android 8.0+ | \`Hushcap_${VERSION}_android.apk\` |"
+            echo "| Command line | \`hushcap-cli-${VERSION}-linux-x86_64.tar.gz\`, \`hushcap-cli-${VERSION}-windows-x86_64.zip\` |"
+            echo
+            echo "Verify downloads with \`sha256sum -c SHA256SUMS.txt --ignore-missing\`."
+            echo "Desktop builds need an x86-64 CPU with AVX2. Windows may show a SmartScreen warning because the installer is not code-signed."
+            if [[ "$TEMPORARY_KEY" == "true" ]]; then
+              echo
+              echo "> **Android:** this APK is signed with a temporary key. If you install a later build signed with the project's permanent key, uninstall this one first."
+            fi
+            echo
+            echo "Full changelog: https://github.com/${REPO}/blob/main/CHANGELOG.md"
+          } > body.md
+          cat body.md
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Hushcap ${{ needs.prepare.outputs.version }}
+          body_path: body.md
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.prepare.outputs.prerelease != 'true' }}
+          fail_on_unmatched_files: true
+          files: release/*

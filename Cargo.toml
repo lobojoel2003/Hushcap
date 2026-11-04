@@ -4,7 +4,7 @@ members = [
     "crates/hushcap-core",
     "crates/hushcap-engine",
     "crates/hushcap-cli",
-    # "desktop/src-tauri",
+    "desktop/src-tauri",
 ]
 default-members = [
     "crates/hushcap-core",

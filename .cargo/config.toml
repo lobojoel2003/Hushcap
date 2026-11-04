@@ -1,0 +1,5 @@
+# Link the C runtime statically on Windows (Rust, whisper.cpp and the app),
+# so Hushcap runs on a fresh Windows install without the Visual C++
+# redistributable. Tauri then links the UCRT dynamically (it ships with Windows).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
