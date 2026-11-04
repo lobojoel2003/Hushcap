@@ -225,6 +225,15 @@ fn main() {
                 log::LevelFilter::Error
             },
         )
+        // Closing a PulseAudio connection on purpose is logged as an error; hide it.
+        .filter_module(
+            "pulseaudio",
+            if cli.verbose {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Off
+            },
+        )
         .parse_env("HUSHCAP_LOG")
         .init();
     if let Err(e) = run(cli) {

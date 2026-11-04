@@ -106,6 +106,20 @@ jobs:
           # A single speaker must get a single label.
           assert len({c["speaker"] for c in captions}) == 1, captions
           PY
+      - name: Live captions from system audio (PulseAudio monitor)
+        run: |
+          sudo apt-get install -y pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=speakers sink_properties=device.description=Speakers
+          pactl set-default-sink speakers
+          ./target/release/hushcap devices
+          # Play the recording into the virtual speakers while Hushcap captions their monitor.
+          (sleep 5; paplay --device=speakers jfk.wav) &
+          (sleep 25; echo) | ./target/release/hushcap live --system --model whisper-tiny.en \
+            --speaker-model none --no-partials > live.txt
+          cat live.txt
+          grep -qi "\[system\]" live.txt
+          grep -qi "your country" live.txt
       - name: Speaker model integration test
         env:
           HUSHCAP_TEST_SPEAKER_MODEL: ${{ github.workspace }}/.models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx

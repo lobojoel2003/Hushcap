@@ -91,6 +91,12 @@ fn is_monitor(id: &str) -> bool {
     id.ends_with(".monitor")
 }
 
+/// Whether `monitor_id` ("pulseaudio:<sink>.monitor") monitors the default
+/// output device `default_out` ("pulseaudio:<sink>").
+fn monitor_is_default(monitor_id: &str, default_out: Option<&str>) -> bool {
+    is_monitor(monitor_id) && default_out == Some(monitor_id.trim_end_matches(".monitor"))
+}
+
 fn is_wasapi(host: &cpal::Host) -> bool {
     host_name(host).eq_ignore_ascii_case("wasapi")
 }
@@ -120,10 +126,7 @@ pub fn list_devices() -> Result<DeviceList> {
         let name = device_name(device);
         if is_monitor(&id) {
             // Monitor of the default sink is the default system source.
-            let sink = id.trim_end_matches(".monitor");
-            let is_default = default_out
-                .as_deref()
-                .is_some_and(|out| out.split_once(':').map(|(_, s)| s) == Some(sink));
+            let is_default = monitor_is_default(&id, default_out.as_deref());
             list.system.push(AudioDevice {
                 id,
                 name,
@@ -469,4 +472,30 @@ fn capture_thread(
     drop(stream);
     log::debug!("stream closed in {:?}", t.elapsed());
     sink.finished();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn monitor_detection() {
+        assert!(is_monitor(
+            "pulseaudio:alsa_output.pci.analog-stereo.monitor"
+        ));
+        assert!(!is_monitor("pulseaudio:alsa_input.usb-mic"));
+        assert!(monitor_is_default(
+            "pulseaudio:speakers.monitor",
+            Some("pulseaudio:speakers")
+        ));
+        assert!(!monitor_is_default(
+            "pulseaudio:hdmi.monitor",
+            Some("pulseaudio:speakers")
+        ));
+        assert!(!monitor_is_default("pulseaudio:speakers.monitor", None));
+        assert!(!monitor_is_default(
+            "pulseaudio:speakers",
+            Some("pulseaudio:speakers")
+        ));
+    }
 }

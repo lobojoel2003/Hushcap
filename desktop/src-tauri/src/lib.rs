@@ -345,8 +345,10 @@ async fn export_transcript(
 
 /// Build and run the app.
 pub fn run() {
+    // The PulseAudio client logs an "error" whenever a connection is closed on
+    // purpose (after listing devices); it is noise, so it is off by default.
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info,whisper_rs=warn"),
+        env_logger::Env::default().default_filter_or("info,whisper_rs=warn,pulseaudio=off"),
     )
     .init();
 
