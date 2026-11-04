@@ -1,8 +1,9 @@
 //! Catalogue of downloadable models.
 //!
 //! Models are downloaded once, on request, and then used fully offline.
-//! Each entry pins an HTTPS URL and, where published, a SHA-256 checksum that
-//! the downloader verifies before a file is used.
+//! Each entry pins an HTTPS URL, the exact file size and its SHA-256
+//! checksum; the downloader verifies both before a file is used. The "Model
+//! catalogue" workflow re-checks every entry against upstream each month.
 
 use serde::Serialize;
 
@@ -56,7 +57,7 @@ const SHERPA: &str =
 
 macro_rules! whisper {
     ($id:literal, $file:literal, $name:literal, $desc:literal, $langs:literal, $multi:literal,
-     $mb:literal, $rec:literal, $speed:literal, $acc:literal) => {
+     $mb:literal, $bytes:literal, $sha:literal, $rec:literal, $speed:literal, $acc:literal) => {
         ModelInfo {
             id: $id,
             kind: ModelKind::Speech,
@@ -70,8 +71,8 @@ macro_rules! whisper {
                 $file
             ),
             size_mb: $mb,
-            size_bytes: None,
-            sha256: None,
+            size_bytes: Some($bytes),
+            sha256: Some($sha),
             recommended: $rec,
             speed: $speed,
             accuracy: $acc,
@@ -88,6 +89,8 @@ static CATALOG: &[ModelInfo] = &[
         "English",
         false,
         57,
+        59721011,
+        "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f",
         true,
         4,
         3
@@ -100,6 +103,8 @@ static CATALOG: &[ModelInfo] = &[
         "English",
         false,
         75,
+        77704715,
+        "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
         false,
         5,
         2
@@ -112,6 +117,8 @@ static CATALOG: &[ModelInfo] = &[
         "English",
         false,
         142,
+        147964211,
+        "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
         false,
         4,
         3
@@ -124,6 +131,8 @@ static CATALOG: &[ModelInfo] = &[
         "English",
         false,
         181,
+        190098681,
+        "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
         false,
         3,
         4
@@ -136,6 +145,8 @@ static CATALOG: &[ModelInfo] = &[
         "English",
         false,
         466,
+        487614201,
+        "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
         false,
         2,
         4
@@ -148,6 +159,8 @@ static CATALOG: &[ModelInfo] = &[
         "99 languages",
         true,
         142,
+        147951465,
+        "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
         false,
         4,
         3
@@ -160,6 +173,8 @@ static CATALOG: &[ModelInfo] = &[
         "99 languages",
         true,
         75,
+        77691713,
+        "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
         false,
         5,
         2
@@ -172,6 +187,8 @@ static CATALOG: &[ModelInfo] = &[
         "99 languages",
         true,
         466,
+        487601967,
+        "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
         false,
         2,
         4
@@ -184,6 +201,8 @@ static CATALOG: &[ModelInfo] = &[
         "99 languages",
         true,
         547,
+        574041195,
+        "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
         false,
         1,
         5
@@ -297,14 +316,24 @@ mod tests {
     }
 
     #[test]
-    fn checksums_are_well_formed() {
+    fn every_model_is_pinned_and_well_formed() {
         for m in catalog() {
-            if let Some(h) = m.sha256 {
-                assert_eq!(h.len(), 64, "{}", m.id);
-                assert!(h
-                    .chars()
-                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
-            }
+            // Every download is verified, so every entry needs a checksum and size.
+            let h = m.sha256.unwrap_or_else(|| panic!("{} has no sha256", m.id));
+            assert_eq!(h.len(), 64, "{}", m.id);
+            assert!(h
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+            let bytes = m
+                .size_bytes
+                .unwrap_or_else(|| panic!("{} has no size", m.id));
+            let mb = bytes as f64 / 1_000_000.0;
+            assert!(
+                (mb - m.size_mb as f64).abs() / mb < 0.1,
+                "{}: size_mb {} vs {bytes} bytes",
+                m.id,
+                m.size_mb
+            );
             assert!((1..=5).contains(&m.speed) && (1..=5).contains(&m.accuracy));
         }
         assert!(find("whisper-base.en").is_some());
