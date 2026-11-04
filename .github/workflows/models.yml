@@ -22,7 +22,7 @@ jobs:
     name: Desktop models
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -68,7 +68,7 @@ jobs:
     name: Android models
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Check every Vosk model URL
         run: |
           set -uo pipefail

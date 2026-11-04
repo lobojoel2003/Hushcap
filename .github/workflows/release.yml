@@ -34,7 +34,7 @@ jobs:
       prerelease: ${{ steps.meta.outputs.prerelease }}
       publish: ${{ steps.meta.outputs.publish }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Version and tag
         id: meta
         env:
@@ -75,7 +75,7 @@ jobs:
             echo "Release build of Hushcap $VERSION." > notes.md
           fi
           cat notes.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: notes.md
@@ -93,7 +93,7 @@ jobs:
             os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -101,7 +101,7 @@ jobs:
           sudo apt-get install -y libasound2-dev libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf \
             libfuse2 file
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -170,7 +170,7 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then exe=target/release/hushcap.exe; else exe=target/release/hushcap; fi
           "$exe" --version
           "$exe" models list --json > /dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.name }}
           path: dist/*
@@ -183,12 +183,12 @@ jobs:
     outputs:
       temporary-key: ${{ steps.keystore.outputs.temporary }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Signing key
         id: keystore
         env:
@@ -235,7 +235,7 @@ jobs:
           "$build_tools/apksigner" verify --print-certs "$apk"
           mkdir -p dist
           cp "$apk" "dist/Hushcap_${VERSION}_android.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: dist/*
@@ -249,7 +249,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Assemble files and checksums
@@ -287,7 +287,7 @@ jobs:
           } > body.md
           cat body.md
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: Hushcap ${{ needs.prepare.outputs.version }}
