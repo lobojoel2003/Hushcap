@@ -1,0 +1,41 @@
+[package]
+name = "hushcap-engine"
+description = "Audio capture, offline speech recognition and speaker labelling engine for Hushcap"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+build = "build.rs"
+
+[features]
+default = ["whisper"]
+# Compile whisper.cpp. Disable to build the engine without a speech backend (tests, docs).
+whisper = ["dep:whisper-rs"]
+
+[dependencies]
+hushcap-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+parking_lot.workspace = true
+sha2.workspace = true
+hex.workspace = true
+hound.workspace = true
+whisper-rs = { workspace = true, optional = true }
+tract-onnx.workspace = true
+cpal.workspace = true
+reqwest.workspace = true
+dirs.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Pure-Rust PulseAudio client (works with PipeWire via pipewire-pulse); exposes
+# "monitor" sources, which is how system audio is captured on Linux.
+cpal = { workspace = true, features = ["pulseaudio"] }
+
+[dev-dependencies]
+tempfile.workspace = true

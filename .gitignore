@@ -1,0 +1,46 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+/desktop/dist/
+/desktop/.svelte-kit/
+*.tsbuildinfo
+
+# Tauri generated files
+/desktop/src-tauri/gen/schemas/
+
+# Android / Gradle
+/android/.gradle/
+/android/build/
+/android/**/build/
+/android/local.properties
+/android/.idea/
+/android/captures/
+/android/app/release/
+*.iml
+*.apk
+*.aab
+*.keystore
+*.jks
+!/android/app/debug.keystore.placeholder
+
+# Models and recordings (never commit these)
+*.bin
+*.onnx
+*.gguf
+*.wav
+!/assets/samples/*.wav
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Local env
+.env
+.env.*

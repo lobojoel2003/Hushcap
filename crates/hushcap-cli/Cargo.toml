@@ -1,0 +1,23 @@
+[package]
+name = "hushcap-cli"
+description = "Command-line interface for Hushcap private offline live captions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "hushcap"
+path = "src/main.rs"
+
+[dependencies]
+hushcap-core.workspace = true
+hushcap-engine.workspace = true
+anyhow.workspace = true
+log.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
