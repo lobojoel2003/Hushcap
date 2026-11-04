@@ -113,8 +113,9 @@ Every release includes `SHA256SUMS.txt`. Verify a download with `sha256sum -c SH
 > **CPU requirements (desktop):** release builds target x86-64 CPUs with AVX2 (most PCs from
 > 2013 onwards). Older CPUs are too slow for live Whisper captions; build from source for them.
 >
-> **Windows SmartScreen** may warn that the installer is unrecognised because it is not code-signed.
-> Choose *More info → Run anyway*.
+> **Windows:** the installer and the CLI include the Microsoft Visual C++ runtime, so nothing else
+> needs installing. SmartScreen may warn that the installer is unrecognised because it is not
+> code-signed; choose *More info → Run anyway*.
 
 ## Getting started
 

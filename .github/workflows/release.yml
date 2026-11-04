@@ -114,9 +114,32 @@ jobs:
       - name: Install frontend dependencies
         working-directory: desktop
         run: npm ci
+      - name: Bundle the Microsoft C++ runtime (Windows)
+        # App-local deployment of the VC++ runtime DLLs, so Hushcap runs on a
+        # fresh Windows install without the separate redistributable.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          vs="$(cygpath -u "$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property installationPath)")"
+          crt="$(ls -d "$vs"/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT | sort -V | tail -1)"
+          echo "Using $crt"
+          mkdir -p desktop/src-tauri/vcruntime
+          cp "$crt"/*.dll desktop/src-tauri/vcruntime/
+          ls -la desktop/src-tauri/vcruntime
+          echo '{"bundle":{"resources":{"vcruntime/*.dll":"./"}}}' > desktop/src-tauri/tauri.vcruntime.conf.json
+          echo "TAURI_EXTRA_CONFIG=--config src-tauri/tauri.vcruntime.conf.json" >> "$GITHUB_ENV"
       - name: Build installers
         working-directory: desktop
-        run: npm run tauri build -- --ci
+        shell: bash
+        run: npm run tauri build -- --ci ${TAURI_EXTRA_CONFIG:-}
+      - name: Check the C++ runtime sits next to the app (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ls target/release/*.dll
+          test -f target/release/vcruntime140.dll
+          test -f target/release/msvcp140.dll
       - name: Build command-line tool
         run: cargo build --release --locked -p hushcap-cli
       - name: Collect artifacts
@@ -137,7 +160,7 @@ jobs:
             cp "$bundle"/msi/*.msi "$bundle"/nsis/*.exe dist/
             name="hushcap-cli-$VERSION-windows-x86_64"
             mkdir -p "$name"
-            cp target/release/hushcap.exe LICENSE README.md "$name"/
+            cp target/release/hushcap.exe LICENSE README.md desktop/src-tauri/vcruntime/*.dll "$name"/
             7z a -tzip "dist/$name.zip" "$name" > /dev/null
           fi
           ls -la dist
