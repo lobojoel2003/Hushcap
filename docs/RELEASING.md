@@ -38,6 +38,12 @@ The **Release** workflow then:
 
 Every binary embeds the CI run number as its build number, plus the commit and build date.
 
+### Releasing without pushing a tag
+
+If you can't push tags (for example from a restricted environment), run **Actions → Release →
+Run workflow** on `main` with **publish** checked. The workflow checks the version and changelog,
+builds everything, and creates the `vX.Y.Z` tag on that commit together with the release.
+
 ## Dry run
 
 Run the **Release** workflow manually (*Actions → Release → Run workflow*) with `publish` unchecked
