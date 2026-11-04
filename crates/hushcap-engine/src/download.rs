@@ -246,17 +246,33 @@ mod tests {
     }
 
     #[test]
-    fn verify_uses_recorded_checksum() {
+    fn verify_uses_recorded_checksum_when_catalogue_has_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ModelStore::open(dir.path()).unwrap();
+        let mut info = hushcap_core::models::find("whisper-tiny.en")
+            .unwrap()
+            .clone();
+        info.sha256 = None; // exercise the fallback to the recorded checksum
+        let path = store.path_for(&info);
+        fs::write(&path, b"lmgg-test").unwrap();
+        assert!(verify_installed(&info, &store).is_err(), "no checksum yet");
+        let digest = hex::encode(Sha256::digest(b"lmgg-test"));
+        fs::write(checksum_path(&path), format!("{digest}  x\n")).unwrap();
+        assert!(verify_installed(&info, &store).unwrap());
+        fs::write(&path, b"lmgg-tampered").unwrap();
+        assert!(!verify_installed(&info, &store).unwrap());
+    }
+
+    #[test]
+    fn verify_prefers_the_catalogue_checksum() {
         let dir = tempfile::tempdir().unwrap();
         let store = ModelStore::open(dir.path()).unwrap();
         let info = hushcap_core::models::find("whisper-tiny.en").unwrap();
         let path = store.path_for(info);
-        fs::write(&path, b"lmgg-test").unwrap();
-        assert!(verify_installed(info, &store).is_err(), "no checksum yet");
-        let digest = hex::encode(Sha256::digest(b"lmgg-test"));
+        fs::write(&path, b"lmgg-not-the-real-model").unwrap();
+        // A matching sidecar must not override the pinned catalogue checksum.
+        let digest = hex::encode(Sha256::digest(b"lmgg-not-the-real-model"));
         fs::write(checksum_path(&path), format!("{digest}  x\n")).unwrap();
-        assert!(verify_installed(info, &store).unwrap());
-        fs::write(&path, b"lmgg-tampered").unwrap();
         assert!(!verify_installed(info, &store).unwrap());
     }
 
